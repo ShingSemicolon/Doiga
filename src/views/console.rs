@@ -1,3 +1,4 @@
+use crate::models::anime::AnimeModel;
 use super::trait_view::View;
 
 pub struct ConsoleView;
@@ -23,6 +24,18 @@ impl View for ConsoleView {
             std::process::Command::new("cls").status().unwrap();
         } else {
             std::process::Command::new("clear").status().unwrap();
+        }
+    }
+
+    fn display_animes(&self, animes: &Vec<AnimeModel>) {
+        for (i, anime) in animes.iter().enumerate() {
+            let colored_text: String;
+            if i % 2 == 0 {
+                colored_text = format!("[2;33m{}. {} ({})[0m", i + 1, anime.title, anime.year);
+            } else {
+                colored_text = format!("{}. {} ({})", i + 1, anime.title, anime.year);
+            }
+            println!("{}", colored_text);
         }
     }
 }
