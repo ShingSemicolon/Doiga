@@ -1,4 +1,4 @@
-use crate::models::anime::AnimeModel;
+use crate::models::AnimeModel;
 
 pub trait View {
     fn display_message(&self, message: &str);
