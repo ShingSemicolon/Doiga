@@ -1,6 +1,9 @@
+extern crate regex;
+use regex::Regex;
 use std::error::Error;
+use base64::{prelude::BASE64_STANDARD, Engine};
 use scraper::ElementRef;
-use crate::{models::{AnimeModel, PlayersModel}, views::trait_view::View};
+use crate::{models::{AnimeModel, PlayersModel}, views::view::View};
 
 pub struct Controller<T: View> {
     view: T,
@@ -54,21 +57,26 @@ impl<T: View> Controller<T> {
         return Ok(animes);
     }
     fn get_format_url(&self, name: &str, number: &str) -> String {
+        let regex = Regex::new(r"[^A-Za-z0-9 ]+").unwrap();
+        let name = regex.replace_all(name, "").to_string();
         let format_text = name.split_whitespace().collect::<Vec<&str>>().join("-");
         return format!("https://monoschinos2.com/ver/{}-episodio-{}", format_text, number);
         
+    }
+    fn decode_base64(episode: &ElementRef) -> String {
+        let data_player = episode.value().attr("data-player").unwrap();
+        let vec_data = BASE64_STANDARD.decode(data_player).unwrap();
+        return String::from_utf8(vec_data).unwrap();
     }
     fn get_players(&self, episodes: &Vec<ElementRef>) -> Vec<PlayersModel> {
         let mut players: Vec<PlayersModel> = Vec::new();
         for episode in episodes {
             let text = episode.text().collect::<Vec<&str>>()[0];
-            let data_player = episode.value().attr("data-player").unwrap();
-            players.push(PlayersModel { name: text.to_string(), data: data_player.to_string() });
+            let link = Controller::<T>::decode_base64(episode);
+            players.push(PlayersModel { name: text.to_string(), data: link });
         }
         return players;    
     }
-
-    
     fn get_episode(&self, name: &str, number: &str) -> Vec<PlayersModel> {
         let url = self.get_format_url(name, number);
         let response = reqwest::blocking::get(&url);

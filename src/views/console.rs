@@ -1,5 +1,5 @@
 use crate::models::AnimeModel;
-use super::trait_view::View;
+use super::view::View;
 
 pub struct ConsoleView;
 
