@@ -1,9 +1,8 @@
 extern crate regex;
-use regex::Regex;
 use std::error::Error;
 use base64::{prelude::BASE64_STANDARD, Engine};
 use scraper::ElementRef;
-use crate::{models::{AnimeModel, PlayersModel}, views::view::View};
+use crate::{models::{AnimeModel, PlayersModel}, views::{view::View, browser}};
 
 pub struct Controller<T: View> {
     view: T,
@@ -15,20 +14,51 @@ impl<T: View> Controller<T> {
     }
 
     pub fn run(&self) {
-        self.view.clear_screen();
-        let input = self.view.get_user_input("Ingresa el nombre del anime");
-        let Ok(animes) = self.get_animes(input.as_str()) else { return };
-        self.view.display_animes(&animes);
-        let input = self.view.get_user_input(format!("Elige un anime  (1-{})", animes.len()).as_str());
-        let anime = animes.get(input.parse::<usize>().unwrap() - 1).unwrap();
-        self.view.clear_screen();
-        self.view.display_message(format!("Anime elegido: {}", anime.title).as_str());
-        let input = self.view.get_user_input("Ingresa el episodio que quieres ver");
-        let players = self.get_episode(anime.title.as_str(), input.as_str());
-       for player in players {
-           self.view.display_message(format!("{}: {}", player.name, player.data).as_str()); // Got all players and data.
-       }
-       // TODO: Get player video and play it. (mpv)
+            self.view.clear_screen();
+
+            let animes = loop {
+                let input = self.view.get_user_input("Ingresa el nombre del anime");
+                match self.get_animes(input.as_str()) {
+                    Ok(animes) if !animes.is_empty() => break animes,
+                    _ =>{ 
+                        self.view.display_message("Anime no encontrado.");
+                        continue;
+                    },
+                }
+            };
+            
+            self.view.display_animes(&animes);
+
+            let anime = loop {
+                let input = self.view.get_user_input(format!("Elige un anime  (1-{})", animes.len()).as_str());
+                if let Ok(number) = input.parse::<usize>() {
+                    if number > 0 && number <= animes.len() {
+                        break animes.get(input.parse::<usize>().unwrap() - 1).unwrap();
+                    }
+                } else {
+                    self.view.display_message("Ingresa un numero válido.");
+                    continue;
+                }
+            };
+            self.view.clear_screen();
+            self.view.display_message(format!("Anime elegido: {}", anime.title).as_str());
+
+            let players = loop {
+                let input = self.view.get_user_input("Ingresa el episodio que quieres ver");
+                match input.parse::<usize>() {
+                    Ok(number) if number > 0 => break self.get_episode(anime.url.as_str(), input.as_str()),
+                  
+                    _ => {
+                                    self.view.display_message("Ingresa un numero valido");
+                                    continue;
+                                }
+                }
+            };
+            
+            browser::display(anime.title.as_str(), &players);
+    
+       
+       // TODO: Get player video and play it.
     }
     fn get_data(&self, document: Vec<ElementRef>) -> Vec<AnimeModel> {
         let mut animes: Vec<AnimeModel> = Vec::new();
@@ -56,12 +86,16 @@ impl<T: View> Controller<T> {
 
         return Ok(animes);
     }
-    fn get_format_url(&self, name: &str, number: &str) -> String {
-        let regex = Regex::new(r"[^A-Za-z0-9 ]+").unwrap();
-        let name = regex.replace_all(name, "").to_string();
-        let format_text = name.split_whitespace().collect::<Vec<&str>>().join("-");
-        return format!("https://monoschinos2.com/ver/{}-episodio-{}", format_text, number);
-        
+    fn get_format_url(&self, url: &str, number: &str) -> String {
+        let response = reqwest::blocking::get(url);
+        let html_content = response.unwrap().text().unwrap();
+        let document = scraper::Html::parse_document(&html_content);
+        let episodes_selector = scraper::Selector::parse(r#"a[href*="1"]"#).unwrap();
+        let episode = document.select(&episodes_selector).next().unwrap();
+        let url = episode.value().attr("href").unwrap().to_string();
+        let regex = regex::Regex::new(r"\d+$").unwrap();
+        let url = regex.replace(&url, number).to_string();
+        return url;
     }
     fn decode_base64(episode: &ElementRef) -> String {
         let data_player = episode.value().attr("data-player").unwrap();
@@ -77,8 +111,8 @@ impl<T: View> Controller<T> {
         }
         return players;    
     }
-    fn get_episode(&self, name: &str, number: &str) -> Vec<PlayersModel> {
-        let url = self.get_format_url(name, number);
+    fn get_episode(&self, url: &str, number: &str) -> Vec<PlayersModel> {
+        let url = self.get_format_url(url, number);
         let response = reqwest::blocking::get(&url);
         let html_content = response.unwrap().text().unwrap();
         let document = scraper::Html::parse_document(&html_content);
