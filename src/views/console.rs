@@ -7,6 +7,11 @@ impl View for ConsoleView {
     fn display_message(&self, message: &str) {
         println!("{}", message);
     }
+
+    fn display_error(&self, message: &str) {
+        println!("[2;31m[1;31mError: {}[0m", message);
+    }
+
     fn get_user_input(&self, message: &str) -> String {
         use std::io::{self, Write};
 
@@ -36,5 +41,6 @@ impl View for ConsoleView {
             }
             println!("{}", colored_text);
         }
+        println!()
     }
 }

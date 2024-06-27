@@ -15,50 +15,63 @@ impl<T: View> Controller<T> {
 
     pub fn run(&self) {
             self.view.clear_screen();
-
+            let mut err: bool = false;
             let animes = loop {
+                if err {
+                    self.view.display_error("Anime no encontrado.");
+                    err = false;
+                }
                 let input = self.view.get_user_input("Ingresa el nombre del anime");
                 match self.get_animes(input.as_str()) {
                     Ok(animes) if !animes.is_empty() => break animes,
                     _ =>{ 
-                        self.view.display_message("Anime no encontrado.");
+                        err = true;
+                        self.view.clear_screen();
                         continue;
                     },
                 }
             };
             
-            self.view.display_animes(&animes);
-
+            self.view.clear_screen();
+            
             let anime = loop {
+                self.view.display_animes(&animes);
+                if err {
+                    self.view.display_error("Ingresa un numero válido.");
+                    err = false;
+                }
                 let input = self.view.get_user_input(format!("Elige un anime  (1-{})", animes.len()).as_str());
                 if let Ok(number) = input.parse::<usize>() {
                     if number > 0 && number <= animes.len() {
                         break animes.get(input.parse::<usize>().unwrap() - 1).unwrap();
                     }
                 } else {
-                    self.view.display_message("Ingresa un numero válido.");
+                    err = true;
+                    self.view.clear_screen();
                     continue;
                 }
             };
-            self.view.clear_screen();
-            self.view.display_message(format!("Anime elegido: {}", anime.title).as_str());
 
+            self.view.clear_screen();
+            
             let players = loop {
+                self.view.display_message(format!("Anime elegido: {}", anime.title).as_str());
+                if err {
+                    self.view.display_error("Episodio no encontrado.");
+                }
                 let input = self.view.get_user_input("Ingresa el episodio que quieres ver");
                 match input.parse::<usize>() {
                     Ok(number) if number > 0 => break self.get_episode(anime.url.as_str(), input.as_str()),
                   
                     _ => {
-                                    self.view.display_message("Ingresa un numero valido");
-                                    continue;
-                                }
+                        err = true;
+                        self.view.clear_screen();
+                        continue;
+                        }
                 }
             };
             
             browser::display(anime.title.as_str(), &players);
-    
-       
-       // TODO: Get player video and play it.
     }
     fn get_data(&self, document: Vec<ElementRef>) -> Vec<AnimeModel> {
         let mut animes: Vec<AnimeModel> = Vec::new();

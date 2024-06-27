@@ -12,7 +12,7 @@ pub fn display(name: &str, players: &Vec<PlayersModel>) {
         .resizable(true)
         .debug(false)
         .user_data(())
-        .invoke_handler(|webview, _arg| {
+        .invoke_handler(|_webview, _arg| {
             // Inyectar JavaScript para eliminar anuncios y contenido innecesario
             Ok(())
         })        .run()
