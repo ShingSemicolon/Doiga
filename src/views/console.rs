@@ -1,6 +1,7 @@
 use crate::models::AnimeModel;
 use super::view::View;
-
+use crossterm::{execute, terminal::{Clear, ClearType}};
+use std::io::stdout;
 pub struct ConsoleView;
 
 impl View for ConsoleView {
@@ -24,11 +25,7 @@ impl View for ConsoleView {
     }
 
     fn clear_screen(&self) {
-        if cfg!(windows) {
-            std::process::Command::new("cls").status().unwrap();
-        } else {
-            std::process::Command::new("clear").status().unwrap();
-        }
+        execute!(stdout(), Clear(ClearType::All)).unwrap();
     }
 
     fn display_animes(&self, animes: &Vec<AnimeModel>) {

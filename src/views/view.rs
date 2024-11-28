@@ -1,5 +1,4 @@
 use crate::models::AnimeModel;
-
 pub trait View {
     fn display_message(&self, message: &str);
     fn display_error(&self, message: &str);

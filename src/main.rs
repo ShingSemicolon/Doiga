@@ -5,8 +5,9 @@ mod views;
 use controllers::anime::Controller;
 use views::console::ConsoleView;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let controller = Controller::new(ConsoleView);
-    controller.run();
+    controller.run().await;
     
 }

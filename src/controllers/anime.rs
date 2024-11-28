@@ -1,8 +1,9 @@
 extern crate regex;
-use std::error::Error;
+use std::{error::Error, io::stdout};
 use base64::{prelude::BASE64_STANDARD, Engine};
+use crossterm::{cursor::{self, MoveTo}, event::{self, Event, KeyCode}, execute, style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor}, terminal::{self, Clear, ClearType}};
 use scraper::ElementRef;
-use crate::{models::{AnimeModel, PlayersModel}, views::{view::View, browser}};
+use crate::{controllers::anime_client::AnimeClient, models::{AnimeModel, PlayersModel}, views::view::View};
 
 pub struct Controller<T: View> {
     view: T,
@@ -13,66 +14,69 @@ impl<T: View> Controller<T> {
         Self { view }
     }
 
-    pub fn run(&self) {
-            self.view.clear_screen();
-            let mut err: bool = false;
-            let animes = loop {
-                if err {
-                    self.view.display_error("Anime no encontrado.");
-                    err = false;
-                }
-                let input = self.view.get_user_input("Ingresa el nombre del anime");
-                match self.get_animes(input.as_str()) {
-                    Ok(animes) if !animes.is_empty() => break animes,
-                    _ =>{ 
-                        err = true;
-                        self.view.clear_screen();
-                        continue;
-                    },
-                }
-            };
-            
-            self.view.clear_screen();
-            
-            let anime = loop {
-                self.view.display_animes(&animes);
-                if err {
-                    self.view.display_error("Ingresa un numero válido.");
-                    err = false;
-                }
-                let input = self.view.get_user_input(format!("Elige un anime  (1-{})", animes.len()).as_str());
-                if let Ok(number) = input.parse::<usize>() {
-                    if number > 0 && number <= animes.len() {
-                        break animes.get(input.parse::<usize>().unwrap() - 1).unwrap();
+    pub async fn run(&self) {
+            let anime = AnimeClient::new();
+            let season_now = anime.get_season_now().await.unwrap().data;
+            let mut selected_index = 0;
+            terminal::enable_raw_mode().unwrap();
+            loop {
+                // Limpia la pantalla y dibuja las opciones
+                execute!(stdout(), Clear(ClearType::All)).unwrap();
+                for (index, anime) in season_now.iter().enumerate() {
+                    if index == selected_index {
+                        // Marca la opción seleccionada
+                        execute!(
+                            stdout(),
+                            MoveTo(0, index as u16),
+                            SetForegroundColor(Color::Black),
+                            SetBackgroundColor(Color::White),
+                            Print(format!("> {}", anime.title)),
+                            ResetColor
+                        ).unwrap();
+                    } else {
+                        execute!(stdout(), MoveTo(0, index as u16), Print(format!("  {}\r\n", anime.title))).unwrap();
                     }
-                } else {
-                    err = true;
-                    self.view.clear_screen();
-                    continue;
                 }
-            };
-
-            self.view.clear_screen();
-            
-            let players = loop {
-                self.view.display_message(format!("Anime elegido: {}", anime.title).as_str());
-                if err {
-                    self.view.display_error("Episodio no encontrado.");
-                }
-                let input = self.view.get_user_input("Ingresa el episodio que quieres ver");
-                match input.parse::<usize>() {
-                    Ok(number) if number > 0 => break self.get_episode(anime.url.as_str(), input.as_str()),
-                  
-                    _ => {
-                        err = true;
-                        self.view.clear_screen();
-                        continue;
+        
+                if let Event::Key(key_event) = event::read().unwrap() {
+                    match key_event.code {
+                        KeyCode::Up => {
+                            if selected_index > 0 {
+                                selected_index -= 1;
+                            }
                         }
+                        KeyCode::Down => {
+                            print!("{}", season_now.len());
+                            if selected_index < season_now.len() - 1 {
+                                selected_index += 1;
+                            }
+                        }
+                        KeyCode::Enter => {
+                            // Maneja la selección
+                            if season_now[selected_index].title == "Salir" {
+                                break;
+                            } else {
+                                execute!(
+                                    stdout(),
+                                    Clear(ClearType::All),
+                                    Print(format!("Seleccionaste: {}\n", season_now[selected_index].title))
+                                ).unwrap();
+                                std::thread::sleep(std::time::Duration::from_secs(2));
+                            }
+                        }
+                        KeyCode::Esc => break,
+                        _ => {}
+                    }
                 }
-            };
-            
-            browser::display(anime.title.as_str(), &players);
-    }
+            }
+        
+            // Restaurar el estado del terminal
+            execute!(stdout(), cursor::Show, terminal::LeaveAlternateScreen).unwrap();
+            terminal::disable_raw_mode().unwrap();
+        }
+
+
+
     fn get_data(&self, document: Vec<ElementRef>) -> Vec<AnimeModel> {
         let mut animes: Vec<AnimeModel> = Vec::new();
         for anime in document {
@@ -89,7 +93,7 @@ impl<T: View> Controller<T> {
         return animes
     }
     fn get_animes(&self, name: &str) -> Result<Vec<AnimeModel>, Box<dyn Error>> {
-        let input = format!("https://monoschinos2.com/buscar?q={}", name.trim());
+        let input = format!("https://monoschinos2.com/buscar?q={}", name.trim()); // https://nyaa.si/
         let response = reqwest::blocking::get(&input);
         let html_content = response.unwrap().text().unwrap();
         let document = scraper::Html::parse_document(&html_content);
